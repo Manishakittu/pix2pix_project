@@ -58,3 +58,41 @@ class Discriminator(nn.Module):
 # Initialize models
 G_sat2map = Generator()
 D_map = Discriminator()
+import torch.optim as optim
+
+# Loss functions
+adversarial_loss = nn.BCELoss()
+l1_loss = nn.L1Loss()
+
+# Optimizers
+lr = 0.0002
+optimizer_G = optim.Adam(G_sat2map.parameters(), lr=lr)
+optimizer_D = optim.Adam(D_map.parameters(), lr=lr)
+
+# Training loop
+epochs = 10
+for epoch in range(epochs):
+    for (sat_images, _), (map_images, _) in zip(satellite_loader, map_loader):
+        
+        # Generate fake maps
+        fake_map = G_sat2map(sat_images)
+
+        # Discriminator loss
+        real_loss = adversarial_loss(D_map(map_images), torch.ones_like(D_map(map_images)))
+        fake_loss = adversarial_loss(D_map(fake_map.detach()), torch.zeros_like(D_map(fake_map)))
+        d_loss = (real_loss + fake_loss) / 2
+
+        optimizer_D.zero_grad()
+        d_loss.backward()
+        optimizer_D.step()
+
+        # Generator loss
+        g_loss = adversarial_loss(D_map(fake_map), torch.ones_like(D_map(fake_map)))
+        cycle_loss = l1_loss(fake_map, map_images)
+        total_g_loss = g_loss + 10 * cycle_loss
+
+        optimizer_G.zero_grad()
+        total_g_loss.backward()
+        optimizer_G.step()
+
+    print(f"Epoch {epoch+1}/{epochs} - D Loss: {d_loss.item():.4f}, G Loss: {total_g_loss.item():.4f}")
